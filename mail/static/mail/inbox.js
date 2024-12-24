@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     emails.forEach(email => {
       // Create div element to display list of emails
       const emailItem = document.createElement('div');
-      emailItem.classList.add('form-control');
+      emailItem.classList.add('form-control', 'email-item');
       emailItem.style.display = 'flex';
       emailItem.style.flexDirection = 'row';
       emailItem.style.justifyContent = 'space-between';
@@ -148,7 +148,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Submit form
   document.querySelector('#compose-form').onsubmit = function(event) {
     event.preventDefault();
-    load_mailbox('sent')
     fetch('/emails', {
       method: 'POST',
       body: JSON.stringify({
@@ -159,6 +158,11 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(response => response.json())
     .then(result => {
+      if (result.error) {
+        alert(result.error);
+      } else {
+        load_mailbox('sent');
+      }
     })
     .catch(error => {
       console.log("Error", error);
@@ -201,6 +205,68 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('#compose-view').style.display = 'block';
   
     // Clear out composition fields
+    document.querySelector('#compose-recipients').value = '';
+    document.querySelector('#compose-subject').value = '';
+    document.querySelector('#compose-body').value = '';
+  }
+
+  // Add animations for changing views
+  function animateViewChange(view) {
+    view.style.opacity = 0;
+    setTimeout(() => {
+      view.style.opacity = 1;
+    }, 300);
+  }
+
+  // Override default display functions to include animations
+  function showView(view) {
+    animateViewChange(view);
+    view.style.display = 'block';
+  }
+
+  function hideView(view) {
+    view.style.display = 'none';
+  }
+
+  // Update load_mailbox and compose_email to use the new animation functions
+  function load_mailbox(mailbox) {
+    const emailsView = document.querySelector('#emails-view');
+    const composeView = document.querySelector('#compose-view');
+    const emailView = document.querySelector('#email');
+    const emailBody = document.querySelector('#email-body');
+    const buttons = document.querySelector('#buttons');
+
+    showView(emailsView);
+    hideView(composeView);
+    hideView(emailView);
+    hideView(emailBody);
+    hideView(buttons);
+
+    document.querySelector('#emails-view').innerHTML = `<h3>${mailbox.charAt(0).toUpperCase() + mailbox.slice(1)}</h3>`;
+
+    fetch(`/emails/${mailbox}`)
+      .then(response => response.json())
+      .then(emails => {
+        displayEmails(emails);
+      })
+      .catch(error => {
+        console.log("Error", error);
+      });
+  }
+
+  function compose_email() {
+    const emailsView = document.querySelector('#emails-view');
+    const composeView = document.querySelector('#compose-view');
+    const emailView = document.querySelector('#email');
+    const emailBody = document.querySelector('#email-body');
+    const buttons = document.querySelector('#buttons');
+
+    hideView(emailsView);
+    hideView(buttons);
+    hideView(emailView);
+    hideView(emailBody);
+    showView(composeView);
+
     document.querySelector('#compose-recipients').value = '';
     document.querySelector('#compose-subject').value = '';
     document.querySelector('#compose-body').value = '';

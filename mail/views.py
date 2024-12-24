@@ -31,43 +31,34 @@ def compose(request):
 
     # Check recipient emails
     data = json.loads(request.body)
-    emails = [email.strip() for email in data.get("recipients").split(",")]
-    if emails == [""]:
-        return JsonResponse({
-            "error": "At least one recipient required."
-        }, status=400)
+    recipients_field = data.get("recipients")
+    if not recipients_field:
+        return JsonResponse({"error": "Recipients field is required."}, status=400)
+    emails = [email.strip() for email in recipients_field.split(",")]
+    if not emails:
+        return JsonResponse({"error": "At least one recipient required."}, status=400)
 
     # Convert email addresses to users
-    recipients = []
-    for email in emails:
-        try:
-            user = User.objects.get(email=email)
-            recipients.append(user)
-        except User.DoesNotExist:
-            return JsonResponse({
-                "error": f"User with email {email} does not exist."
-            }, status=400)
+    recipients = User.objects.filter(email__in=emails)
+    if recipients.count() != len(emails):
+        non_existent_emails = set(emails) - set(recipients.values_list('email', flat=True))
+        return JsonResponse({"error": f"One or more recipients do not exist: {', '.join(non_existent_emails)}"}, status=400)
 
     # Get contents of email
     subject = data.get("subject", "")
     body = data.get("body", "")
 
     # Create one email for each recipient, plus sender
-    users = set()
-    users.add(request.user)
-    users.update(recipients)
-    for user in users:
-        email = Email(
-            user=user,
-            sender=request.user,
-            subject=subject,
-            body=body,
-            read=user == request.user
-        )
-        email.save()
-        for recipient in recipients:
-            email.recipients.add(recipient)
-        email.save()
+    email = Email(
+        user=request.user,
+        sender=request.user,
+        subject=subject,
+        body=body,
+        read=True
+    )
+    email.save()
+    email.recipients.set(recipients)
+    email.save()
 
     return JsonResponse({"message": "Email sent successfully."}, status=201)
 
@@ -76,23 +67,19 @@ def compose(request):
 def mailbox(request, mailbox):
 
     # Filter emails returned based on mailbox
-    if mailbox == "inbox":
-        emails = Email.objects.filter(
-            user=request.user, recipients=request.user, archived=False
-        )
-    elif mailbox == "sent":
-        emails = Email.objects.filter(
-            user=request.user, sender=request.user
-        )
-    elif mailbox == "archive":
-        emails = Email.objects.filter(
-            user=request.user, recipients=request.user, archived=True
-        )
-    else:
+    if mailbox not in ["inbox", "sent", "archive"]:
         return JsonResponse({"error": "Invalid mailbox."}, status=400)
 
-    # Return emails in reverse chronologial order
-    emails = emails.order_by("-timestamp").all()
+    filters = {
+        "user": request.user,
+        "archived": mailbox == "archive"
+    }
+    if mailbox == "inbox":
+        filters["recipients"] = request.user
+    elif mailbox == "sent":
+        filters["sender"] = request.user
+
+    emails = Email.objects.filter(**filters).order_by("-timestamp").all()
     return JsonResponse([email.serialize() for email in emails], safe=False)
 
 
@@ -113,9 +100,9 @@ def email(request, email_id):
     # Update whether email is read or should be archived
     elif request.method == "PUT":
         data = json.loads(request.body)
-        if data.get("read") is not None:
+        if "read" in data:
             email.read = data["read"]
-        if data.get("archived") is not None:
+        if "archived" in data:
             email.archived = data["archived"]
         email.save()
         return HttpResponse(status=204)

@@ -1,0 +1,15 @@
+
+{% extends "mail/layout.html" %}
+{% load static %}
+
+{% block body %}
+    <h2>Animation Page</h2>
+    <div id="animation-container">
+        <div id="animated-box"></div>
+    </div>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'index' %}">Back to Inbox</a>
+{% endblock %}
+
+{% block script %}
+    <script src="{% static 'mail/animate.js' %}"></script>
+{% endblock %}
